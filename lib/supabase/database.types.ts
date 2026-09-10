@@ -1,4 +1,4 @@
-export type UserRole = 'student' | 'tutor' | 'admin/content_manager';
+export type UserRole = 'student' | 'tutor' | 'admin' | 'content_manager' | 'admin/content_manager';
 
 export interface Profile {
   id: string;
@@ -44,6 +44,34 @@ export interface UserBookmarkRow {
   created_at: string;
 }
 
+export interface ContentReviewRow {
+  id: string;
+  package_id: string;
+  version: string;
+  status: 'DRAFT' | 'VALIDATION' | 'HUMAN_REVIEW' | 'APPROVED' | 'PUBLISHED' | 'ARCHIVED';
+  human_verified: boolean;
+  reviewer_id: string | null;
+  reviewer_email: string | null;
+  change_reason: string;
+  checksum: string | null;
+  reviewed_at: string;
+  created_at: string;
+}
+
+export interface SyncMutationRow {
+  id: string;
+  mutation_id: string;
+  user_id: string;
+  entity_id: string;
+  operation: string;
+  payload: Record<string, any>;
+  client_version: string | null;
+  client_timestamp: string;
+  sync_status: 'pending' | 'syncing' | 'synced' | 'failed';
+  idempotency_key: string;
+  server_acknowledged_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -66,6 +94,16 @@ export interface Database {
         Row: UserBookmarkRow;
         Insert: Omit<UserBookmarkRow, 'id' | 'created_at'>;
         Update: Partial<UserBookmarkRow>;
+      };
+      content_reviews: {
+        Row: ContentReviewRow;
+        Insert: Omit<ContentReviewRow, 'id' | 'created_at'>;
+        Update: Partial<ContentReviewRow>;
+      };
+      sync_mutations: {
+        Row: SyncMutationRow;
+        Insert: Omit<SyncMutationRow, 'id' | 'server_acknowledged_at'>;
+        Update: Partial<SyncMutationRow>;
       };
     };
   };

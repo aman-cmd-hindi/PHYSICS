@@ -1,276 +1,206 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Sparkles, Loader2, ArrowRight, BookOpen, RefreshCw, Zap, Lightbulb } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { BookOpen, AlertCircle, CheckCircle2, Award, Zap, HelpCircle } from "lucide-react";
 import { OFFICIAL_CHAPTERS_MANIFEST } from "@/content/manifest";
+import { VERIFIED_PYQS_CATALOG } from "@/content/data/pyqs";
+import { VERIFIED_PHYSICS_FORMULAS } from "@/content/data/formulas";
 import { MCQBlock } from "@/components/questions/MCQBlock";
 import { NumericalBlock } from "@/components/questions/NumericalBlock";
-import { MCQQuestionBlock, NumericalBlock as NumericalBlockType } from "@/content/types/course";
+import { PYQBlock } from "@/components/pyqs/PYQBlock";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-interface DynamicContentData {
-  summary: string;
-  keyFormulas: { name: string; latex: string; meaning: string }[];
-  practiceQuestions: MCQQuestionBlock[];
-  numerical: {
-    question: string;
-    given: string;
-    formula: string;
-    solutionSteps: string[];
-    finalAnswer: string;
-  };
-}
-
 export default function PracticePage() {
   const [selectedChapterId, setSelectedChapterId] = useState<string>(OFFICIAL_CHAPTERS_MANIFEST[0].id);
-  const [selectedTopic, setSelectedTopic] = useState<string>("Moment of Inertia and Angular Momentum");
-  const [customPrompt, setCustomPrompt] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [dynamicData, setDynamicData] = useState<DynamicContentData | null>(null);
-  const [activeTab, setActiveTab] = useState<"mcq" | "numerical" | "concept">("mcq");
+  const [activeTab, setActiveTab] = useState<"questions" | "formulas" | "pyqs">("questions");
 
-  const currentChapter = OFFICIAL_CHAPTERS_MANIFEST.find((c) => c.id === selectedChapterId) || OFFICIAL_CHAPTERS_MANIFEST[0];
+  const currentChapter = useMemo(
+    () => OFFICIAL_CHAPTERS_MANIFEST.find((c) => c.id === selectedChapterId) || OFFICIAL_CHAPTERS_MANIFEST[0],
+    [selectedChapterId]
+  );
 
-  async function fetchDynamicContent(topic: string = selectedTopic) {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/gemini/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chapterTitle: currentChapter.title,
-          topicTitle: topic,
-          context: customPrompt || `Maharashtra Board Class 12 Physics: ${currentChapter.title}`,
-        }),
-      });
+  // Filter strictly verified curriculum content
+  const chapterPYQs = useMemo(
+    () => VERIFIED_PYQS_CATALOG.filter((p) => p.chapterId === selectedChapterId),
+    [selectedChapterId]
+  );
 
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || "Failed to generate dynamic content");
-      }
+  const chapterFormulas = useMemo(
+    () => VERIFIED_PHYSICS_FORMULAS.filter((f) => f.chapterId === selectedChapterId),
+    [selectedChapterId]
+  );
 
-      setDynamicData(json.data);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to contact Gemini API. Please ensure your API key is active.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Extract verified MCQ items from verified PYQ repository
+  const verifiedMCQs = useMemo(
+    () => chapterPYQs.filter((p) => p.options && p.options.length > 0 && p.correctOptionIndex !== undefined),
+    [chapterPYQs]
+  );
 
-  useEffect(() => {
-    fetchDynamicContent("Rotational Motion and Moment of Inertia");
-  }, [selectedChapterId]);
+  const hasVerifiedPractice = chapterPYQs.length > 0 || chapterFormulas.length > 0;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-extrabold tracking-tight text-foreground">Dynamic Practice & Mastery</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight text-foreground">Verified Practice & Mastery</h2>
             <Badge variant="indigo" className="gap-1 px-2.5 py-0.5 text-xs font-semibold">
-              <Sparkles className="h-3 w-3 text-indigo-400" />
-              Powered by Gemini
+              <CheckCircle2 className="h-3 w-3 text-indigo-400" />
+              100% Deterministic Syllabus Content
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Real-time syllabus-aligned questions, step-by-step numerical derivations, and explanations.
+            Authoritative Maharashtra State Board past questions, verified marking schemes, and governing formulas.
           </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchDynamicContent()}
-            disabled={loading}
-            className="rounded-xl gap-1.5"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            <span>Regenerate Set</span>
-          </Button>
         </div>
       </div>
 
-      {/* Chapter & Topic Selection */}
-      <Card className="p-4 border-border bg-card/60 backdrop-blur-sm shadow-sm space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
-              Select Chapter (Maharashtra Board Class 12)
-            </label>
-            <select
-              value={selectedChapterId}
-              onChange={(e) => setSelectedChapterId(e.target.value)}
-              className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              {OFFICIAL_CHAPTERS_MANIFEST.map((ch) => (
-                <option key={ch.id} value={ch.id}>
-                  Chapter {ch.chapterNumber}: {ch.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
-              Topic / Sub-concept
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={selectedTopic}
-                onChange={(e) => setSelectedTopic(e.target.value)}
-                placeholder="e.g. Surface Tension, Doppler Effect, Carnot Engine"
-                className="flex-1 bg-background border border-border rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => fetchDynamicContent()}
-                disabled={loading}
-                className="rounded-xl px-4"
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Load"}
-              </Button>
-            </div>
-          </div>
+      {/* Chapter Selection */}
+      <Card className="p-4 border-border bg-card/60 backdrop-blur-sm shadow-sm space-y-3">
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+            Select Chapter (Maharashtra Board Class 12 Physics)
+          </label>
+          <select
+            value={selectedChapterId}
+            onChange={(e) => setSelectedChapterId(e.target.value)}
+            className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            {OFFICIAL_CHAPTERS_MANIFEST.map((ch) => (
+              <option key={ch.id} value={ch.id}>
+                Chapter {ch.chapterNumber}: {ch.title} ({ch.weightageMarks} Marks)
+              </option>
+            ))}
+          </select>
         </div>
       </Card>
 
-      {error && (
-        <Card className="p-4 border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400">
-          <p className="text-sm font-semibold">{error}</p>
+      {/* Content Switcher Tabs */}
+      <div className="flex items-center gap-2 border-b border-border pb-3">
+        <Button
+          variant={activeTab === "questions" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setActiveTab("questions")}
+          className="rounded-xl gap-1.5"
+        >
+          <HelpCircle className="h-4 w-4" />
+          <span>Verified MCQs ({verifiedMCQs.length})</span>
+        </Button>
+        <Button
+          variant={activeTab === "pyqs" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setActiveTab("pyqs")}
+          className="rounded-xl gap-1.5"
+        >
+          <Award className="h-4 w-4" />
+          <span>Board PYQ Catalog ({chapterPYQs.length})</span>
+        </Button>
+        <Button
+          variant={activeTab === "formulas" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setActiveTab("formulas")}
+          className="rounded-xl gap-1.5"
+        >
+          <Zap className="h-4 w-4" />
+          <span>Governing Formulas ({chapterFormulas.length})</span>
+        </Button>
+      </div>
+
+      {/* PRACTICE CONTENT OR EXPLICIT UNAVAILABLE STATE */}
+      {!hasVerifiedPractice && (
+        <Card className="p-12 text-center space-y-4 border-dashed border-border bg-card/40">
+          <div className="mx-auto h-12 w-12 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold text-foreground">
+              Verified practice content is not available yet.
+            </h3>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              Per strict curriculum integrity rules, unverified or AI-fabricated questions are not served. Official verified practice packages for Chapter {currentChapter.chapterNumber} ({currentChapter.title}) are currently awaiting authorization.
+            </p>
+          </div>
+          <Badge variant="outline" className="text-xs font-mono">
+            STATUS: CONTENT_REQUIRED
+          </Badge>
         </Card>
       )}
 
-      {loading && !dynamicData && (
-        <div className="flex flex-col items-center justify-center p-16 space-y-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm font-medium text-muted-foreground">Generating questions and derivations...</p>
-        </div>
-      )}
-
-      {dynamicData && (
+      {hasVerifiedPractice && (
         <div className="space-y-6">
-          {/* Content Switcher Tabs */}
-          <div className="flex items-center gap-2 border-b border-border pb-3">
-            <Button
-              variant={activeTab === "mcq" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveTab("mcq")}
-              className="rounded-xl gap-1.5"
-            >
-              <Lightbulb className="h-4 w-4" />
-              <span>Dynamic MCQs ({dynamicData.practiceQuestions?.length || 0})</span>
-            </Button>
-            <Button
-              variant={activeTab === "numerical" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveTab("numerical")}
-              className="rounded-xl gap-1.5"
-            >
-              <Zap className="h-4 w-4" />
-              <span>Step-by-Step Numerical</span>
-            </Button>
-            <Button
-              variant={activeTab === "concept" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveTab("concept")}
-              className="rounded-xl gap-1.5"
-            >
-              <BookOpen className="h-4 w-4" />
-              <span>Concept Overview & Formulas</span>
-            </Button>
-          </div>
-
-          {/* DYNAMIC MCQS TAB */}
-          {activeTab === "mcq" && (
+          {/* VERIFIED MCQS TAB */}
+          {activeTab === "questions" && (
             <div className="space-y-4">
-              <Badge variant="indigo">Board Exam Pattern MCQs with Wrong-Answer Flow</Badge>
-              {dynamicData.practiceQuestions?.map((q, idx) => (
-                <MCQBlock
-                  key={q.id || idx}
-                  block={{
-                    ...q,
-                    order: idx + 1,
-                    type: "mcq",
-                    id: q.id || `dynamic_mcq_${idx}`,
-                  }}
-                  topicId={selectedChapterId}
-                />
+              {verifiedMCQs.length === 0 ? (
+                <Card className="p-8 text-center space-y-2 border-dashed">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Verified practice content is not available yet.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    No verified multiple-choice questions have been published for this chapter.
+                  </p>
+                </Card>
+              ) : (
+                verifiedMCQs.map((q, idx) => (
+                  <MCQBlock
+                    key={q.id}
+                    block={{
+                      id: q.id,
+                      type: "mcq",
+                      order: idx + 1,
+                      question: q.question,
+                      options: q.options || [],
+                      correctOptionIndex: q.correctOptionIndex ?? 0,
+                      explanation: q.explanation || "Standard Maharashtra State Board solution.",
+                      hint: `Refer to ${q.relatedConcept || "textbook derivation"}.`,
+                    }}
+                    topicId={q.topicId}
+                  />
+                ))
+              )}
+            </div>
+          )}
+
+          {/* VERIFIED PYQS TAB */}
+          {activeTab === "pyqs" && (
+            <div className="space-y-4">
+              {chapterPYQs.map((pyq) => (
+                <PYQBlock key={pyq.id} pyq={pyq} />
               ))}
             </div>
           )}
 
-          {/* DYNAMIC NUMERICAL TAB */}
-          {activeTab === "numerical" && dynamicData.numerical && (
-            <div className="space-y-4">
-              <Badge variant="sky">Board Exam 3-4 Mark Numerical Derivation</Badge>
-              <Card className="p-6 border-border space-y-4">
-                <div className="space-y-2">
-                  <h3 className="font-bold text-lg text-foreground">{dynamicData.numerical.question}</h3>
-                  <div className="p-3 bg-muted/40 rounded-xl text-sm font-medium border border-border">
-                    <span className="text-muted-foreground font-semibold">Given: </span>
-                    {dynamicData.numerical.given}
-                  </div>
-                  <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl text-sm font-mono text-primary font-bold">
-                    <span className="text-muted-foreground font-sans font-semibold">Formula: </span>
-                    {dynamicData.numerical.formula}
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-2">
-                  <h4 className="text-sm font-bold text-foreground uppercase tracking-wider">Solution Steps (Board Marking Scheme)</h4>
-                  <div className="space-y-2">
-                    {dynamicData.numerical.solutionSteps?.map((step, sIdx) => (
-                      <div key={sIdx} className="p-3 rounded-xl bg-card border border-border text-sm flex gap-3">
-                        <span className="font-bold text-primary shrink-0">{sIdx + 1}.</span>
-                        <div className="text-foreground leading-relaxed">{step}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
-                  <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Final Board Answer</span>
-                  <span className="font-mono font-bold text-emerald-800 dark:text-emerald-300 text-base">
-                    {dynamicData.numerical.finalAnswer}
-                  </span>
-                </div>
-              </Card>
-            </div>
-          )}
-
-          {/* CONCEPT & FORMULAS TAB */}
-          {activeTab === "concept" && (
-            <div className="space-y-6">
-              <Card className="p-6 border-border space-y-4">
-                <h3 className="font-bold text-lg text-foreground">Summary & Key Concepts</h3>
-                <div className="prose dark:prose-invert text-sm max-w-none text-foreground leading-relaxed whitespace-pre-wrap">
-                  {dynamicData.summary}
-                </div>
-              </Card>
-
-              {dynamicData.keyFormulas && dynamicData.keyFormulas.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Governing Equations</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {dynamicData.keyFormulas.map((f, fIdx) => (
-                      <Card key={fIdx} className="p-4 border-border space-y-2">
-                        <Badge variant="outline">{f.name}</Badge>
-                        <div className="p-3 bg-muted/30 rounded-xl font-mono text-center text-primary font-bold text-base">
-                          {f.latex}
-                        </div>
-                        <p className="text-xs text-muted-foreground">{f.meaning}</p>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
+          {/* FORMULAS TAB */}
+          {activeTab === "formulas" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {chapterFormulas.length === 0 ? (
+                <Card className="col-span-2 p-8 text-center space-y-2 border-dashed">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Verified practice content is not available yet.
+                  </p>
+                </Card>
+              ) : (
+                chapterFormulas.map((f) => (
+                  <Card key={f.id} className="p-5 border-border space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline">{f.title}</Badge>
+                      {f.isImportantBoard && <Badge variant="warning">Important Board</Badge>}
+                    </div>
+                    <div className="p-3 bg-muted/40 rounded-xl font-mono text-center text-primary font-bold text-lg">
+                      {f.latex}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{f.physicalMeaning}</p>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {f.variables.map((v, vIdx) => (
+                        <span key={vIdx} className="text-[11px] bg-secondary px-2 py-0.5 rounded-md text-foreground">
+                          <strong>{v.symbol}</strong>: {v.name} ({v.unit})
+                        </span>
+                      ))}
+                    </div>
+                  </Card>
+                ))
               )}
             </div>
           )}

@@ -19,5 +19,7 @@ export interface FormulaLabConfig {
   targetVariableUnit: string;
   variables: FormulaLabVariableConfig[];
   visualizerType: VisualizerType;
+  /** Safe mathematical expression string evaluated via SafeFormulaEvaluator without eval() */
+  expression?: string;
   calculateFn: (variables: Record<string, number>) => number;
 }

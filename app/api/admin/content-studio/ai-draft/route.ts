@@ -1,8 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest) {
   try {
+    // 1. Strict Server-Side Authentication & Authorization Check
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized: Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    // Verify role is admin or content_manager from database profile
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    const allowedRoles = ["admin", "content_manager", "admin/content_manager"];
+    if (!profile || !allowedRoles.includes(profile.role)) {
+      return NextResponse.json(
+        { error: "Forbidden: Admin or Content Manager role required for AI draft assistant" },
+        { status: 403 }
+      );
+    }
+
     const { topicTitle, chapterTitle, context } = await req.json();
     const apiKey = process.env.GEMINI_API_KEY;
 
@@ -15,17 +44,18 @@ export async function POST(req: NextRequest) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    const prompt = `You are an expert Maharashtra State Board Class 12 Physics teacher.
-Create syllabus-aligned study and practice material for:
+    const prompt = `You are a draft assistant for Maharashtra State Board Class 12 Physics.
+Generate a tentative syllabus DRAFT for:
 Chapter: "${chapterTitle}"
 Topic: "${topicTitle}"
-Context: "${context || "Standard board syllabus"}"
+Context: "${context || "Official Maharashtra Board syllabus"}"
 
+NOTE: This is an internal draft that requires mandatory human review and verification before publishing.
 Provide:
-1. Summary: A conceptual overview with definitions and laws.
-2. Key Formulas: Up to 3 important formulas with names and meanings (use simple plain text or standard math symbols like tau, omega, pi, r^2).
-3. Practice Questions: Exactly 2 multiple choice questions following Maharashtra board style with 4 options, hint, and step-by-step explanation.
-4. Numerical: 1 board-style numerical problem with given parameters, formula, 3 solution steps, and final answer with units.`;
+1. Summary overview.
+2. Key Formulas with symbols, latex, and meanings.
+3. Practice MCQs with 4 options, hint, and explanation.
+4. Step-by-step numerical derivation example.`;
 
     const responseSchema: Schema = {
       type: Type.OBJECT,
@@ -83,7 +113,7 @@ Provide:
     let response;
     try {
       response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -91,7 +121,7 @@ Provide:
         },
       });
     } catch (e) {
-      console.warn("Primary gemini-3.6-flash failed, trying gemini-flash-latest:", e);
+      console.warn("Primary model failed, trying fallback:", e);
       response = await ai.models.generateContent({
         model: "gemini-flash-latest",
         contents: prompt,
@@ -105,11 +135,21 @@ Provide:
     const rawText = response.text || "{}";
     const data = JSON.parse(rawText);
 
-    return NextResponse.json({ success: true, data });
+    // Explicitly annotate that this is an unpublished draft requiring human verification
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...data,
+        status: "DRAFT",
+        humanVerified: false,
+        requiresHumanReview: true,
+        generatedAt: new Date().toISOString(),
+      },
+    });
   } catch (error: any) {
-    console.error("Gemini Generation Error:", error);
+    console.error("Admin Draft Assistant Error:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to generate dynamic content from Gemini" },
+      { error: error?.message || "Failed to generate draft content" },
       { status: 500 }
     );
   }

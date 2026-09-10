@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { FormulaLabConfig } from "@/features/formula-lab/types";
+import { SafeFormulaEvaluator } from "@/lib/formula-lab/safe-evaluator";
 import { drawTorqueDiagram, drawCentripetalDiagram } from "@/lib/graphics/canvas-helpers";
 import { CanvasGraph } from "@/components/simulations/CanvasGraph";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FlaskConical, RotateCcw, Activity } from "lucide-react";
+import { FlaskConical, RotateCcw, Activity, AlertTriangle } from "lucide-react";
 
 interface FormulaLabProps {
   config: FormulaLabConfig;
@@ -15,17 +16,41 @@ interface FormulaLabProps {
 
 export function FormulaLab({ config }: FormulaLabProps) {
   // Initialize slider state map from config defaultValues
-  const initialValues = config.variables.reduce((acc, v) => {
-    acc[v.id] = v.defaultValue;
-    return acc;
-  }, {} as Record<string, number>);
+  const initialValues = useMemo(
+    () =>
+      config.variables.reduce((acc, v) => {
+        acc[v.id] = v.defaultValue;
+        return acc;
+      }, {} as Record<string, number>),
+    [config.variables]
+  );
 
   const [variables, setVariables] = useState<Record<string, number>>(initialValues);
   const [graphHistory, setGraphHistory] = useState<{ x: number; y: number }[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Calculate live output
-  const outputValue = config.calculateFn(variables);
+  // Variable domains for safe evaluation
+  const domains = useMemo(() => {
+    return config.variables.reduce((acc, v) => {
+      acc[v.id] = { min: v.min, max: v.max };
+      return acc;
+    }, {} as Record<string, { min: number; max: number }>);
+  }, [config.variables]);
+
+  // Safe evaluation calculation: prioritize expression through SafeFormulaEvaluator, fallback to calculateFn
+  const evalResult = useMemo(() => {
+    if (config.expression) {
+      return SafeFormulaEvaluator.evaluate(config.expression, variables, domains);
+    }
+    try {
+      const val = config.calculateFn(variables);
+      return { value: val, isValid: true };
+    } catch (e: any) {
+      return { value: 0, isValid: false, error: e.message || "Calculation failed" };
+    }
+  }, [config, variables, domains]);
+
+  const outputValue = evalResult.value;
 
   // Draw 2D canvas visualizer whenever variables update
   useEffect(() => {
@@ -54,12 +79,13 @@ export function FormulaLab({ config }: FormulaLabProps) {
       );
     }
 
-    // Append to graph history
-    setGraphHistory((prev) => [
-      ...prev.slice(-30),
-      { x: variables[config.variables[0].id] || 0, y: Number(outputValue.toFixed(2)) },
-    ]);
-  }, [variables, config, outputValue]);
+    if (evalResult.isValid) {
+      setGraphHistory((prev) => [
+        ...prev.slice(-30),
+        { x: variables[config.variables[0]?.id] || 0, y: Number(outputValue.toFixed(2)) },
+      ]);
+    }
+  }, [variables, config, outputValue, evalResult.isValid]);
 
   const handleSliderChange = (varId: string, value: number) => {
     setVariables((prev) => ({ ...prev, [varId]: value }));
@@ -79,6 +105,7 @@ export function FormulaLab({ config }: FormulaLabProps) {
               <FlaskConical className="h-3.5 w-3.5" />
               <span>Interactive Formula Lab</span>
             </Badge>
+            <Badge variant="outline" className="text-[10px]">Deterministic Evaluator</Badge>
           </div>
           <Button variant="ghost" size="sm" onClick={handleReset} className="gap-1.5 text-xs rounded-xl">
             <RotateCcw className="h-3.5 w-3.5" />
@@ -95,15 +122,22 @@ export function FormulaLab({ config }: FormulaLabProps) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Sliders & Numerical Calculation Output */}
           <div className="space-y-5">
-            {/* Live Calculation Result Banner */}
-            <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20 text-center">
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                Calculated {config.targetVariableSymbol}
-              </span>
-              <span className="text-3xl font-extrabold text-primary">
-                {outputValue.toFixed(2)} <span className="text-base font-semibold">{config.targetVariableUnit}</span>
-              </span>
-            </div>
+            {/* Live Calculation Result Banner or Domain Error */}
+            {evalResult.isValid ? (
+              <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20 text-center">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                  Calculated {config.targetVariableSymbol}
+                </span>
+                <span className="text-3xl font-extrabold text-primary">
+                  {outputValue.toFixed(2)} <span className="text-base font-semibold">{config.targetVariableUnit}</span>
+                </span>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-center text-destructive flex items-center justify-center gap-2">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <span className="text-sm font-semibold">{evalResult.error}</span>
+              </div>
+            )}
 
             {/* Parameter Sliders */}
             <div className="space-y-4">
@@ -129,8 +163,8 @@ export function FormulaLab({ config }: FormulaLabProps) {
                       className="w-full accent-primary h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
                     />
                     <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
-                      <span>{v.min}</span>
-                      <span>{v.max}</span>
+                      <span>{v.min} {v.unit}</span>
+                      <span>{v.max} {v.unit}</span>
                     </div>
                   </div>
                 );
@@ -157,7 +191,7 @@ export function FormulaLab({ config }: FormulaLabProps) {
             <div className="w-full flex justify-center">
               <CanvasGraph
                 dataPoints={graphHistory}
-                xLabel={config.variables[0].symbol}
+                xLabel={config.variables[0]?.symbol || "X"}
                 yLabel={config.targetVariableSymbol}
                 width={360}
                 height={140}

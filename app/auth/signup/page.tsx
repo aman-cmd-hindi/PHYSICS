@@ -3,17 +3,17 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Atom, UserPlus, ArrowLeft, Mail, Lock, User } from "lucide-react";
+import { Atom, ArrowLeft, Mail, Lock, User, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 export default function SignUpPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"student" | "tutor">("student");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -23,13 +23,16 @@ export default function SignUpPage() {
     setErrorMsg(null);
 
     const supabase = createClient();
+    // Non-negotiable: Student accounts can NEVER choose their own privileged role.
+    // Client-provided roles are disregarded. All self-signups strictly register as 'student'.
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: fullName,
-          role: role,
+          // Explicitly forced to 'student'. Server-side trigger also enforces 'student'.
+          role: "student",
         },
       },
     });
@@ -55,10 +58,16 @@ export default function SignUpPage() {
           <div className="mx-auto h-12 w-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-bold shadow-md mb-2">
             <Atom className="h-7 w-7 animate-pulse" />
           </div>
-          <CardTitle className="text-2xl font-extrabold">Create Optional Account</CardTitle>
+          <CardTitle className="text-2xl font-extrabold">Student Registration</CardTitle>
           <CardDescription>
-            Account creation is optional. Local learning works without logging in.
+            Account creation is optional. Local learning works offline without logging in.
           </CardDescription>
+          <div className="pt-1 flex justify-center">
+            <Badge variant="indigo" className="gap-1 text-xs py-1 px-2.5">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span>Standard Student Account</span>
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignUp} className="space-y-4">
@@ -113,36 +122,13 @@ export default function SignUpPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Role Selection</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRole("student")}
-                  className={`p-2.5 rounded-xl border text-xs font-bold transition-colors ${
-                    role === "student"
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground hover:bg-secondary"
-                  }`}
-                >
-                  Student
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole("tutor")}
-                  className={`p-2.5 rounded-xl border text-xs font-bold transition-colors ${
-                    role === "tutor"
-                      ? "bg-physics-indigo text-white border-physics-indigo"
-                      : "border-border text-muted-foreground hover:bg-secondary"
-                  }`}
-                >
-                  Tutor / Classroom
-                </button>
-              </div>
+            <div className="p-3 rounded-xl bg-muted/40 border text-xs text-muted-foreground space-y-1">
+              <span className="font-semibold text-foreground block">Role Security Policy:</span>
+              <span>All registrations create Student accounts. Tutor and Content Manager privileges can only be granted through protected server administration.</span>
             </div>
 
             <Button type="submit" disabled={loading} className="w-full h-11 rounded-xl font-bold">
-              {loading ? "Creating account..." : "Sign Up"}
+              {loading ? "Creating account..." : "Sign Up as Student"}
             </Button>
           </form>
 

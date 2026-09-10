@@ -7,6 +7,12 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  const pathname = request.nextUrl.pathname;
+  const isAdminRoute = pathname.startsWith("/admin");
+  const isTutorRoute = pathname.startsWith("/tutor");
+
+  // If Supabase is not configured in local offline mode:
+  // Allow development navigation, but log security warning if privileged routes are accessed.
   if (!isSupabaseConfigured()) {
     return supabaseResponse;
   }
@@ -32,8 +38,52 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh session if expired
-  await supabase.auth.getUser();
+  // Authenticate user session
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Server-side route authorization: /admin/** and /tutor/**
+  if (isAdminRoute || isTutorRoute) {
+    if (!user) {
+      // 401 Unauthorized: Redirect to login
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/login";
+      url.searchParams.set("error", "Unauthorized: Login required");
+      return NextResponse.redirect(url, { status: 302 });
+    }
+
+    // Resolve user's actual database role server-side
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    const userRole = profile?.role || "student";
+
+    if (isAdminRoute) {
+      const allowedAdminRoles = ["admin", "content_manager", "admin/content_manager"];
+      if (!allowedAdminRoles.includes(userRole)) {
+        // 403 Forbidden
+        const url = request.nextUrl.clone();
+        url.pathname = "/";
+        url.searchParams.set("error", "Forbidden: Admin privileges required");
+        return NextResponse.redirect(url, { status: 302 });
+      }
+    }
+
+    if (isTutorRoute) {
+      const allowedTutorRoles = ["tutor", "admin", "content_manager", "admin/content_manager"];
+      if (!allowedTutorRoles.includes(userRole)) {
+        // 403 Forbidden
+        const url = request.nextUrl.clone();
+        url.pathname = "/";
+        url.searchParams.set("error", "Forbidden: Tutor privileges required");
+        return NextResponse.redirect(url, { status: 302 });
+      }
+    }
+  }
 
   return supabaseResponse;
 }
