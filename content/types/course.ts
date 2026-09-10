@@ -9,10 +9,13 @@ export type BlockType =
   | 'example'
   | 'prediction'
   | 'mcq'
+  | 'conceptual'
   | 'numerical'
   | 'pyq'
+  | 'board_style'
   | 'important_board_point'
-  | 'recap';
+  | 'recap'
+  | 'mastery_gate';
 
 export interface BaseBlock {
   id: string; // Stable ID
@@ -47,12 +50,46 @@ export interface MCQQuestionBlock extends BaseBlock {
   options: string[];
   correctOptionIndex: number;
   explanation: string;
-  hint?: string;
+  hint: string;
+  workedExample?: {
+    title: string;
+    steps: string[];
+  };
+}
+
+export interface ConceptualQuestionBlock extends BaseBlock {
+  type: 'conceptual';
+  question: string;
+  hint: string;
+  modelAnswer: string;
+  selfCheckPoints: string[];
+  explanation: string;
+}
+
+export interface PredictionQuestionBlock extends BaseBlock {
+  type: 'prediction';
+  setup: string;
+  question: string;
+  options: string[];
+  correctOptionIndex: number;
+  outcomeExplanation: string;
+  physicalPrinciple: string;
+}
+
+export interface BoardStyleQuestionBlock extends BaseBlock {
+  type: 'board_style';
+  marks: number;
+  year?: number;
+  question: string;
+  modelAnswer: string;
+  markingScheme: { point: string; marks: number }[];
+  keyKeywords: string[];
 }
 
 export interface NumericalBlock extends BaseBlock {
   type: 'numerical';
   question: string;
+  mode: 'guided' | 'semi-guided' | 'exam';
   given: Record<string, { value: number; unit: string; symbol: string }>;
   toFind: string[];
   formulaIds: string[];
@@ -91,7 +128,13 @@ export interface FormulaLabBlock extends BaseBlock {
     defaultValue: number;
     unit: string;
   }[];
-  calculateFnBody: string; // Math function body string
+  calculateFnBody: string;
+}
+
+export interface MasteryGateBlock extends BaseBlock {
+  type: 'mastery_gate';
+  minMcqAccuracyPercent: number;
+  minNumericalsCompleted: number;
 }
 
 export type LessonBlock =
@@ -99,12 +142,16 @@ export type LessonBlock =
   | EquationBlock
   | DefinitionBlock
   | MCQQuestionBlock
+  | ConceptualQuestionBlock
+  | PredictionQuestionBlock
+  | BoardStyleQuestionBlock
   | NumericalBlock
   | PYQBlock
-  | FormulaLabBlock;
+  | FormulaLabBlock
+  | MasteryGateBlock;
 
 export interface TopicPackage {
-  id: string; // Stable ID (e.g. topic_rotational_dynamics_01)
+  id: string; // Stable ID
   chapterId: string;
   title: string;
   sequenceOrder: number;
@@ -118,7 +165,7 @@ export interface TopicPackage {
 }
 
 export interface ChapterPackage {
-  id: string; // Stable ID (e.g. ch_01_rotational_dynamics)
+  id: string;
   chapterNumber: number;
   title: string;
   description: string;
