@@ -7,6 +7,9 @@ import { ConceptualBlock } from "@/components/questions/ConceptualBlock";
 import { PredictionBlock } from "@/components/questions/PredictionBlock";
 import { BoardStyleBlock } from "@/components/questions/BoardStyleBlock";
 import { NumericalBlock } from "@/components/questions/NumericalBlock";
+import { PYQBlock } from "@/components/pyqs/PYQBlock";
+import { FormulaLab } from "@/components/formula/FormulaLab";
+import { PhysicsSimulationLab } from "@/components/simulations/PhysicsSimulationLab";
 import { MasteryGate } from "@/components/mastery/MasteryGate";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -82,6 +85,48 @@ export function LessonRenderer({ blocks, topicId, chapterId, nextTopicId }: Less
 
           case "numerical":
             return <NumericalBlock key={block.id} block={block} />;
+
+          case "formula_lab":
+            return (
+              <FormulaLab
+                key={block.id}
+                config={{
+                  id: block.id,
+                  title: block.formulaTitle || "Interactive Formula Lab",
+                  equationLatex: block.equationLatex || "",
+                  targetVariableSymbol: block.targetVariable || "Result",
+                  targetVariableUnit: "",
+                  visualizerType: "torque",
+                  variables: block.variables || [],
+                  calculateFn: (vars) => {
+                    const vals = Object.values(vars);
+                    return vals.reduce((acc, curr) => acc * curr, 1);
+                  },
+                }}
+              />
+            );
+
+          case "pyq":
+            return (
+              <PYQBlock
+                key={block.id}
+                pyq={{
+                  id: block.id,
+                  year: block.year || 2024,
+                  marks: (block.marks as 1 | 2 | 3 | 4) || 2,
+                  chapterId,
+                  chapterNumber: 1,
+                  topicId,
+                  topicTitle: block.title || "Topic Practice",
+                  difficulty: "medium",
+                  question: block.question,
+                  boardSolution: block.modelAnswer,
+                  markingScheme: block.markingScheme || [{ point: "Correct method and final value", marks: block.marks || 2 }],
+                  explanation: "Standard Maharashtra State Board solution.",
+                  relatedConcept: block.title || "Syllabus Concept",
+                }}
+              />
+            );
 
           case "mastery_gate":
             return (
